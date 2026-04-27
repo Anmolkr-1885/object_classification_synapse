@@ -15,6 +15,13 @@ MODEL_DIR = os.path.join(BASE_DIR, "models_cnn_igzo")
 TFLITE_PATH = os.path.join(MODEL_DIR, "model.tflite")
 RESULTS_PATH = os.path.join(MODEL_DIR, "igzo_cnn_results.pkl")
 
+
+print("📁 BASE DIR:", BASE_DIR)
+print("📁 MODEL DIR:", MODEL_DIR)
+print("📁 FILES IN MODEL DIR:", os.listdir(MODEL_DIR) if os.path.exists(MODEL_DIR) else "DIR NOT FOUND")
+print("TFLITE PATH:", TFLITE_PATH, os.path.exists(TFLITE_PATH))
+print("PKL PATH:", RESULTS_PATH, os.path.exists(RESULTS_PATH))
+
 # ── Classes ───────────────────────────────────
 CLASS_NAMES = ['airplane','automobile','bird','cat','deer',
                'dog','frog','horse','ship','truck']
