@@ -4,4 +4,4 @@ numpy<2
 pillow
 joblib
 scikit-learn
-tensorflow==2.15.0
+tensorflow-cpu==2.13.0
