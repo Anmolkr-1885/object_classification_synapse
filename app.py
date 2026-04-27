@@ -6,27 +6,14 @@ from flask import Flask, request, jsonify, render_template
 from PIL import Image
 import tensorflow as tf
 
-# ── App Config ─────────────────────────────────
-app = Flask(__name__, template_folder='templates')
+app = Flask(__name__)
 
-# ── Paths (FIXED) ──────────────────────────────
+# ── Paths ─────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_DIR = os.path.abspath(os.path.join(BASE_DIR, "models_cnn_igzo"))
+MODEL_DIR = os.path.join(BASE_DIR, "models_cnn_igzo")
 
 TFLITE_PATH = os.path.join(MODEL_DIR, "model.tflite")
 RESULTS_PATH = os.path.join(MODEL_DIR, "igzo_cnn_results.pkl")
-
-# ── Debug Logs ─────────────────────────────────
-print("📂 CURRENT DIR:", os.getcwd())
-print("📂 BASE DIR:", BASE_DIR)
-
-if os.path.exists(MODEL_DIR):
-    print("📂 MODEL FILES:", os.listdir(MODEL_DIR))
-else:
-    print("❌ MODEL DIR NOT FOUND")
-
-print("TFLITE:", TFLITE_PATH, os.path.exists(TFLITE_PATH))
-print("PKL:", RESULTS_PATH, os.path.exists(RESULTS_PATH))
 
 # ── Classes ───────────────────────────────────
 CLASS_NAMES = ['airplane','automobile','bird','cat','deer',
@@ -46,42 +33,31 @@ interpreter = None
 W_dense = b_dense = W_out = b_out = None
 igzo_results = {}
 
-# ── Load Models (SAFE + VERBOSE) ───────────────
+# ── Load Models ───────────────────────────────
 def load_models():
     global interpreter, W_dense, b_dense, W_out, b_out, igzo_results
 
     print("🔄 Loading models...")
 
-    try:
-        # Load PKL
-        if os.path.exists(RESULTS_PATH):
-            print("➡ Loading PKL...")
-            igzo_results = joblib.load(RESULTS_PATH)
-            W_dense = igzo_results['W_dense']
-            b_dense = igzo_results['b_dense']
-            W_out   = igzo_results['W_out']
-            b_out   = igzo_results['b_out']
-            print("✅ PKL loaded")
-        else:
-            print("❌ PKL not found")
+    if os.path.exists(RESULTS_PATH):
+        igzo_results = joblib.load(RESULTS_PATH)
+        W_dense = igzo_results['W_dense']
+        b_dense = igzo_results['b_dense']
+        W_out   = igzo_results['W_out']
+        b_out   = igzo_results['b_out']
+        print("✅ PKL loaded")
+    else:
+        print("❌ PKL not found")
 
-        # Load TFLite
-        if os.path.exists(TFLITE_PATH):
-            print("➡ Loading TFLite...")
-            interpreter = tf.lite.Interpreter(model_path=TFLITE_PATH)
-            interpreter.allocate_tensors()
-            print("✅ TFLite loaded")
-        else:
-            print("❌ TFLite not found")
+    if os.path.exists(TFLITE_PATH):
+        interpreter = tf.lite.Interpreter(model_path=TFLITE_PATH)
+        interpreter.allocate_tensors()
+        print("✅ TFLite loaded")
+    else:
+        print("❌ TFLite not found")
 
-    except Exception as e:
-        print("❌ Model loading error:", e)
-
-# ── Load on first request (FIXED) ──────────────
-@app.before_first_request
-def init_models():
-    print("🚀 First request → loading model")
-    load_models()
+# Load at startup
+load_models()
 
 # ── Preprocess ────────────────────────────────
 def preprocess_image(img):
@@ -142,20 +118,6 @@ def predict_image(img):
 
 # ── Routes ────────────────────────────────────
 
-@app.route('/health')
-def health():
-    return "OK"
-
-@app.route('/debug_files')
-def debug_files():
-    return {
-        "cwd": os.getcwd(),
-        "model_dir_exists": os.path.exists(MODEL_DIR),
-        "model_files": os.listdir(MODEL_DIR) if os.path.exists(MODEL_DIR) else [],
-        "tflite_exists": os.path.exists(TFLITE_PATH),
-        "pkl_exists": os.path.exists(RESULTS_PATH)
-    }
-
 @app.route('/')
 def index():
     model_ready = (interpreter is not None and W_dense is not None)
@@ -189,7 +151,6 @@ def predict():
         })
 
     except Exception as e:
-        print("❌ Prediction error:", e)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/model_info')
