@@ -9,18 +9,24 @@ import tensorflow as tf
 # ── App Config ─────────────────────────────────
 app = Flask(__name__, template_folder='templates')
 
-# ── Paths ─────────────────────────────────────
+# ── Paths (FIXED) ──────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_DIR = os.path.join(BASE_DIR, "models_cnn_igzo")
+MODEL_DIR = os.path.abspath(os.path.join(BASE_DIR, "models_cnn_igzo"))
+
 TFLITE_PATH = os.path.join(MODEL_DIR, "model.tflite")
 RESULTS_PATH = os.path.join(MODEL_DIR, "igzo_cnn_results.pkl")
 
+# ── Debug Logs ─────────────────────────────────
+print("📂 CURRENT DIR:", os.getcwd())
+print("📂 BASE DIR:", BASE_DIR)
 
-print("📁 BASE DIR:", BASE_DIR)
-print("📁 MODEL DIR:", MODEL_DIR)
-print("📁 FILES IN MODEL DIR:", os.listdir(MODEL_DIR) if os.path.exists(MODEL_DIR) else "DIR NOT FOUND")
-print("TFLITE PATH:", TFLITE_PATH, os.path.exists(TFLITE_PATH))
-print("PKL PATH:", RESULTS_PATH, os.path.exists(RESULTS_PATH))
+if os.path.exists(MODEL_DIR):
+    print("📂 MODEL FILES:", os.listdir(MODEL_DIR))
+else:
+    print("❌ MODEL DIR NOT FOUND")
+
+print("TFLITE:", TFLITE_PATH, os.path.exists(TFLITE_PATH))
+print("PKL:", RESULTS_PATH, os.path.exists(RESULTS_PATH))
 
 # ── Classes ───────────────────────────────────
 CLASS_NAMES = ['airplane','automobile','bird','cat','deer',
@@ -40,37 +46,42 @@ interpreter = None
 W_dense = b_dense = W_out = b_out = None
 igzo_results = {}
 
-# ── Load Models (Safe) ─────────────────────────
+# ── Load Models (SAFE + VERBOSE) ───────────────
 def load_models():
     global interpreter, W_dense, b_dense, W_out, b_out, igzo_results
 
     print("🔄 Loading models...")
 
     try:
-        # Load IGZO weights
+        # Load PKL
         if os.path.exists(RESULTS_PATH):
+            print("➡ Loading PKL...")
             igzo_results = joblib.load(RESULTS_PATH)
             W_dense = igzo_results['W_dense']
             b_dense = igzo_results['b_dense']
             W_out   = igzo_results['W_out']
             b_out   = igzo_results['b_out']
-            print("✅ IGZO weights loaded")
+            print("✅ PKL loaded")
         else:
-            print("❌ igzo_cnn_results.pkl not found")
+            print("❌ PKL not found")
 
-        # Load TFLite model
+        # Load TFLite
         if os.path.exists(TFLITE_PATH):
+            print("➡ Loading TFLite...")
             interpreter = tf.lite.Interpreter(model_path=TFLITE_PATH)
             interpreter.allocate_tensors()
-            print("✅ TFLite model loaded")
+            print("✅ TFLite loaded")
         else:
-            print("❌ model.tflite not found")
+            print("❌ TFLite not found")
 
     except Exception as e:
-        print("❌ Model loading failed:", e)
+        print("❌ Model loading error:", e)
 
-# Call safely
-load_models()
+# ── Load on first request (FIXED) ──────────────
+@app.before_first_request
+def init_models():
+    print("🚀 First request → loading model")
+    load_models()
 
 # ── Preprocess ────────────────────────────────
 def preprocess_image(img):
@@ -131,15 +142,22 @@ def predict_image(img):
 
 # ── Routes ────────────────────────────────────
 
-# 🔥 Health check (IMPORTANT)
 @app.route('/health')
 def health():
     return "OK"
 
-# 🔥 Home route
+@app.route('/debug_files')
+def debug_files():
+    return {
+        "cwd": os.getcwd(),
+        "model_dir_exists": os.path.exists(MODEL_DIR),
+        "model_files": os.listdir(MODEL_DIR) if os.path.exists(MODEL_DIR) else [],
+        "tflite_exists": os.path.exists(TFLITE_PATH),
+        "pkl_exists": os.path.exists(RESULTS_PATH)
+    }
+
 @app.route('/')
 def index():
-    print("🔥 HOME ROUTE HIT")
     model_ready = (interpreter is not None and W_dense is not None)
     acc = igzo_results.get('acc_final', 0)
 
@@ -149,7 +167,6 @@ def index():
         accuracy=f"{acc*100:.2f}" if acc else "N/A"
     )
 
-# 🔥 Prediction API
 @app.route('/predict', methods=['POST'])
 def predict():
     if 'image' not in request.files:
@@ -175,7 +192,6 @@ def predict():
         print("❌ Prediction error:", e)
         return jsonify({'error': str(e)}), 500
 
-# 🔥 Model info
 @app.route('/model_info')
 def model_info():
     return jsonify({
@@ -183,7 +199,7 @@ def model_info():
         'accuracy': igzo_results.get('acc_final', 0) * 100
     })
 
-# ── Run (Local only) ──────────────────────────
+# ── Run ───────────────────────────────────────
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
